@@ -1,4 +1,6 @@
 import { Request, Response, response } from 'express';
+import * as jwt from 'jsonwebtoken';
+import Teacher from '../models/teacher.model';
 import Test from '../models/test.model';
 import CandidateResponse from '../models/response.model';
 import Question from '../models/question.model';
@@ -6,7 +8,14 @@ import Question from '../models/question.model';
 class TestController {
     async getAllTests(req: Request, res: Response) {
         try {
-            const tests = await Test.find().populate('questions');
+            const autToken = req.headers.authorization
+            const decoded = Object(jwt.verify(autToken, 'secret'));
+            const teacher = (await Teacher.findById(decoded.id)).toObject();
+            let query = {};
+            if(!teacher.isAdmin) {
+                query = { createdBy: teacher._id };
+            }
+            const tests = await Test.find(query).populate('questions');
             return res.status(200).json(tests);
         } catch (error) {
             console.error(error);
