@@ -4,6 +4,7 @@ import Teacher from '../models/teacher.model';
 import Test from '../models/test.model';
 import CandidateResponse from '../models/response.model';
 import Question from '../models/question.model';
+import { ObjectId } from 'mongodb';
 
 class TestController {
     async getAllTests(req: Request, res: Response) {
@@ -12,7 +13,7 @@ class TestController {
             const decoded = Object(jwt.verify(autToken, 'secret'));
             const teacher = (await Teacher.findById(decoded.id)).toObject();
             let query = {};
-            if(!teacher.isAdmin) {
+            if (!teacher.isAdmin) {
                 query = { createdBy: teacher._id };
             }
             const tests = await Test.find(query).populate('questions');
@@ -87,52 +88,132 @@ class TestController {
             return res.status(500).json({ message: 'Server error' });
         }
     }
-
     async startTest(req: Request, res: Response) {
+        try {
+            const test = await CandidateResponse.findByIdAndUpdate(req.params.testId, {
+                startTime: new Date(),
+                status: "STARTED",
+            })
+            res.status(200).json({ ...test })
+        } catch (err) {
+            console.error(err);
+            return res.status(500).json({ message: "Invalid Test." });
+        }
+    }
+
+    async generateResponse(req: Request, res: Response) {
         try {
             const testId = req.params.id;
             const test = (await Test.findById(testId)).toObject();
             if (test) {
-                
-                const questions = test.questions;
+
+                let questions = test.questions;
                 const _test = {
-                    testId: testId,
-                    candidateId: "John Doe",
-                    status: "STARTED",
-                    startTime: new Date(),
+                    test: testId,
+                    candidate: req.body.studId,
+                    status: null,
+                    startTime: null,
                     endTime: null,
                     totalDuration: null,
                     totalPassed: null,
                     score: null,
                     answers: []
                 };
-                
+
                 questions.forEach((ques: any) => {
                     _test['answers'].push({
                         question: ques._id,
                         isAnswered: false,
                         candidateCode: null,
+                        status: null
                     });
                 });
 
                 const started = await CandidateResponse.create(_test);
-                
-                return res.status(200).json({testId: started._id});
+
+                return res.status(200).json({ testId: started._id });
             }
-            return res.status(500).json({message: "Something went wrong."});
+            return res.status(500).json({ message: "Something went wrong." });
         } catch (error) {
             console.error(error);
-            return res.status(500).json({ message: "Invalid Test."});
+            return res.status(500).json({ message: "Invalid Test." });
+        }
+    }
+
+    async submitTest(req: Request, res: Response) {
+        try {
+            const testId = req.params.testId;
+            const pipeline = [
+                {
+                    $match: {
+                        _id: new ObjectId(testId),
+                    },
+                },
+                {
+                    $unwind: "$answers",
+                },
+                {
+                    $lookup: {
+                        from: "questions",
+                        // Replace "questions" with the actual collection name for questions
+                        localField: "answers.question",
+                        foreignField: "_id",
+                        as: "answers.question",
+                    },
+                },
+                {
+                    $unwind: "$answers.question",
+                },
+                {
+                    $match: {
+                        "answers.status": "Passed",
+                    },
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalPassed: {
+                            $sum: 1,
+                        },
+                        totalMarks: {
+                            $sum: "$answers.question.marks",
+                        },
+                    },
+                },
+            ];
+            const aggregateResult = await CandidateResponse.aggregate(pipeline);
+
+            const test = await CandidateResponse.findById(testId).populate('test');
+            const duration = test.startTime.getTime() - new Date().getTime();
+            const status = test.test['passingMarks'] <= aggregateResult['totalMarks'] ? 'PASSED' : 'FAILED';
+
+            const result = await CandidateResponse.findByIdAndUpdate(testId, { totalDuration: duration, endTime: new Date(), totalPassed: aggregateResult[0].totalPassed, score: aggregateResult[0].totalMarks, status: status }, { new: true }
+            );
+            res.status(200).json(result);
+        } catch (err) {
+            console.log(err);
+            res.status(500).json({ err })
         }
     }
 
     async getTestDetails(req: Request, res: Response) {
         try {
             const testId = req.params.id;
-            const test = await CandidateResponse.findById(testId);
+            const test = (await CandidateResponse.findById(testId).populate('test').populate('answers.question'));
             return res.status(200).json(test);
         } catch (error) {
             console.error(error);
+            res.status(500).json({error})
+        }
+    }
+
+    async getTestResults(req: Request, res: Response) {
+        try {
+            const test = (await CandidateResponse.find().populate('test').populate('candidate'));
+            return res.status(200).json(test);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({error})
         }
     }
 
@@ -146,7 +227,7 @@ class TestController {
             res.status(200).json(question);
         } catch (error) {
             console.error(error);
-            response.status(500).json({message: "Error while fetching question."});
+            response.status(500).json({ message: "Error while fetching question." });
         }
     }
 }

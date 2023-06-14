@@ -4,18 +4,18 @@ interface TestCase {
   inputs: string;
   expectedOutput: string;
   actualOutput: string;
-  comparisionMethod: string;
 }
 
 interface Answer {
   question: mongoose.Types.ObjectId;
   isAnswered: boolean;
+  status: string;
   candidateCode: string; 
   testCases: TestCase[];
 }
 
 export interface IResponse extends mongoose.Document {
-  testId: String;
+  test: String;
   candidateId: String;
   answers: Answer[];
   status: String;
@@ -38,11 +38,7 @@ const TestCaseSchema = new mongoose.Schema({
   actualOutput: {
     type: String,
     required: false
-  },
-  comparisionMethod: {
-    type: String,
-    required: true,
-  },
+  }
 });
 
 const AnswerSchema = new mongoose.Schema({
@@ -58,23 +54,27 @@ const AnswerSchema = new mongoose.Schema({
   isAnswered: {
     type: Boolean,
     required: true
+  },
+  status: {
+    type: String,
+    require: false
   }
 });
 
 const ResponseSchema = new mongoose.Schema({
-  testId: {
-    type: String,
+  test: {
+    type: mongoose.Schema.Types.ObjectId,
     required: true,
+    ref: 'Test'
   },
-  candidateId: {
-    // type: mongoose.Schema.Types.ObjectId,
-    type: String,
-    ref: 'Candidate',
+  candidate: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Student',
     required: true,
   },
   status: {
     type: String,
-    required: true
+    required: false
   },
   answers: {
     type: [AnswerSchema],
@@ -82,7 +82,7 @@ const ResponseSchema = new mongoose.Schema({
   },
   startTime: {
     type: Date,
-    required: true,
+    required: false,
   },
   endTime: {
     type: Date,

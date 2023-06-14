@@ -10,18 +10,28 @@ testRouter.route('')
     .get(testController.getAllTests)
     .post(testController.createTest);
 
+testRouter.route('/all-results').
+    get(testController.getTestResults);
+
 testRouter.route('/:id')
     .get(testController.getTestById)
     .patch(testController.updateTest)
     .delete(testController.deleteTest);
 
-testRouter.route('/start/:id')
-    .post(testController.startTest);
+testRouter.route('/test-response/:id')
+    .post(testController.generateResponse);
+
+testRouter.route('/start/:testId')
+    .patch(testController.startTest);
+
+testRouter.route('/end/:testId')
+    .patch(testController.submitTest);
+
 
 testRouter.route('/test-details/:id')
     .get(testController.getTestDetails);
 
-testRouter.route('/question/:test/:id')
+testRouter.route('/exec')
     .get(testController.getQuestion)
     .post(compiler.runTest);
 
